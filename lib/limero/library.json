@@ -1,0 +1,27 @@
+{
+    "name": "limero",
+    "version": "0.0.1",
+    "keywords": "stream",
+    "description": "Reactive streaming",
+    "platforms": "ststm32",
+    "build": {
+      "libArchive": false,
+      "srcDir": "/home/lieven/workspace/limero",
+      "srcFilter": ["+<src/>", "+<nortos/>","-<src/CborSerializer.*>","-<src/CborDeserializer.*>","-<src/RedisSpine.*>"],
+      "includeDir": "/home/lieven/workspace/limero/inc",
+      "flags": [
+        "-I /home/lieven/workspace/limero/inc",
+        "-mcpu=cortex-m3",
+        "-std=c++11",
+        "-DNO_RTOS",
+        "-mthumb",
+        "-fdata-sections",
+        "-ffunction-sections",
+        "-faligned-new",
+        "-Wall",
+        "-O3"
+      ]
+    },
+    "dependencies": {
+    }
+  }
