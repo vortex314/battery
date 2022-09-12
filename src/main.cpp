@@ -7,6 +7,7 @@
 #include <string.h>
 #include <limero.h>
 #include <Usb.h>
+#include <Adc.h>
 #include <Log.h>
 #include <RedisSpineCbor.h>
 
@@ -26,24 +27,20 @@ TimerSource ticker(mainThread, 100, true, "ticker");
 TimerSource clocker(mainThread, 10000, true, "clocker");
 
 Usb usb(mainThread);
+Adc adc;
 Log logger;
-RedisSpineCbor redis(mainThread);
+RedisSpineCbor redis(mainThread, "battery");
 
 extern "C" void uartSendBytes(uint8_t *buf, size_t len, uint32_t)
 {
-	usb.txdLine.on(Bytes(buf, buf+len));
+	usb.txdLine.on(Bytes(buf, buf + len));
 }
 
 void *__dso_handle = 0;
 
 void usbWriter(char *buffer, uint32_t bufLength)
 {
-	usb.txdLine.on(Bytes(buffer,buffer+bufLength));
-}
-
-void __putchar(char c)
-{
-	usbWriter(&c, 1);
+	usb.txdLine.on(Bytes(buffer, buffer + bufLength));
 }
 
 extern "C" int _write(int, char *ptr, int len)
@@ -67,37 +64,35 @@ int main(void)
 	systick_counter_enable();
 
 	usb.init();
+	adc.init();
 	gpio_set_mode(LED_PORT, GPIO_MODE_OUTPUT_2_MHZ,
 				  GPIO_CNF_OUTPUT_PUSHPULL, LED_PIN);
-	ticker >> [](const TimerMsg &)
+	redis.connected >> [&](const bool &b)
+	{ ticker.interval(b ? 500 : 100); };
+	auto &pubVoltage = redis.publisher<float>("battery/voltage");
+	auto &pubTemp = redis.publisher<float>("battery/temperature");
+	auto &pubVref = redis.publisher<float>("battery/refVoltage");
+
+	ticker >> [&](const TimerMsg &)
 	{
+		static int i = 0;
+		i++;
 		gpio_toggle(LED_PORT, LED_PIN);
+		switch (i % 3)
+		{
+		case 0:
+			pubVoltage.on(adc.read(0)*(3.3/4096));
+			break;
+		case 1:
+			pubTemp.on(adc.read(ADC_CHANNEL_TEMP));
+			break;
+		case 2:
+			pubVref.on(adc.read(ADC_CHANNEL_VREF)*(3.3/4096));
+			break;
+		}
 	};
-	redis.setNode("battery");
-	usb.rxdLine >> [&](const Bytes& frag){ extractFrame(frag,redis.rxdFrame); };
+	usb.rxdLine >> redis.rxdFrame;
 	redis.txdFrame >> usb.txdLine;
-	usb.connected >>  [&](const bool& b){ticker.interval(b?500:100);};
 
 	mainThread.run();
-}
-
-void extractFrame(const Bytes &bs, Sink<Bytes> &flow)
-{
-	static ProtocolDecoder decoder(128);
-
-	for (auto b : bs)
-	{
-		if (b == PPP_FLAG_CHAR)
-		{
-			if (decoder.size() > 2 && decoder.ok() && decoder.checkCrc())
-			{
-				flow.on(decoder);
-			}
-			decoder.reset();
-		}
-		else
-		{
-			decoder.addUnEscaped(b);
-		}
-	}
 }

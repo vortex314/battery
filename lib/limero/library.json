@@ -18,8 +18,7 @@
         "-fdata-sections",
         "-ffunction-sections",
         "-faligned-new",
-        "-Wall",
-        "-O3"
+        "-Wall"
       ]
     },
     "dependencies": {
